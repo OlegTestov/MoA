@@ -17,7 +17,12 @@ class MoASystem:
             # [self.claude_3_5_sonnet, self.gpt_4o],
             [self.claude_3_5_sonnet],  # Aggregation layer
         ]
-        self.logger = logging.getLogger(self.__class__.__name__)  
+        self.logger = logging.getLogger(self.__class__.__name__)
+        self.logger.setLevel(self.config.LOG_LEVEL)
+        console_handler = logging.StreamHandler()
+        console_handler.setLevel(self.config.LOG_LEVEL)
+        self.logger.addHandler(console_handler)
+        
         if not self.config.ANTHROPIC_API_KEY or not self.config.OPENAI_API_KEY:
             self.logger.warning(
                 "Please set ANTHROPIC_API_KEY and OPENAI_API_KEY environment variables."
@@ -196,7 +201,6 @@ class MoASystem:
 
 if __name__ == "__main__":
     moa = MoASystem()
-    logging.basicConfig(level=moa.config.LOG_LEVEL)
     user_prompt = {
         "text": "At the event, there were 66 handshakes. If everyone shook hands with each other, how many people were at the event in total?",
         # "image": moa.process_image("path/to/your/image.jpg")
