@@ -38,7 +38,7 @@ class Prompts:
             Your contribution should represent a quantum leap in solution quality, setting a new standard for insight and analysis.
             """
         )
-        
+
     def moa_final_system(self) -> str:
         return textwrap.dedent(
             """
@@ -54,12 +54,12 @@ class Prompts:
             """
         )
 
-    def moa_final_instruct(self, user_prompt: str) -> str:
+    def moa_final_instruct(self, user_text: str) -> str:
         return textwrap.dedent(
             f"""
             Synthesize all previous analyses to deliver the definitive, authoritative answer to:
 
-            {user_prompt["text"]}
+            {user_text}
 
             Your task:
             1. Integrate key insights from all previous responses, creating a cohesive narrative that surpasses the sum of its parts

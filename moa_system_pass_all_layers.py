@@ -1,5 +1,6 @@
 import base64
-from typing import List, Dict, Union
+import copy
+from typing import List, Dict
 import requests
 import json
 import logging
@@ -22,7 +23,7 @@ class MoASystem:
         console_handler = logging.StreamHandler()
         console_handler.setLevel(self.config.LOG_LEVEL)
         self.logger.addHandler(console_handler)
-        
+
         if not self.config.ANTHROPIC_API_KEY or not self.config.OPENAI_API_KEY:
             self.logger.warning(
                 "Please set ANTHROPIC_API_KEY and OPENAI_API_KEY environment variables."
@@ -33,6 +34,8 @@ class MoASystem:
         model: str,
         system_prompt: str,
         messages: List[Dict[str, str]],
+        user_text: str = None,
+        user_image_path: str = None,
         max_tokens: int = 1000,
         temperature: float = 0.2,
     ) -> str:
@@ -42,16 +45,38 @@ class MoASystem:
             "anthropic-version": "2023-06-01",
         }
 
+        # Create the first message
+        first_message = {"role": "user", "content": []}
+        if user_text:
+            first_message["content"].append({"type": "text", "text": user_text})
+        if user_image_path:
+            base64_image = self.process_image(user_image_path)
+            first_message["content"].append(
+                {
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": "image/jpeg",
+                        "data": base64_image,
+                    },
+                }
+            )
+
+        anthropic_messages = [first_message] + messages
+
         data = {
             "model": model,
             "system": system_prompt,
-            "messages": messages,
+            "messages": anthropic_messages,
             "max_tokens": max_tokens,
             "temperature": temperature,
         }
 
         self.logger.debug("Request data:")
-        self.logger.debug(json.dumps(data, indent=2))
+        logger_data = copy.deepcopy(data)
+        if user_image_path:
+            logger_data["messages"][0]["content"][1].pop("source")
+        self.logger.debug(json.dumps(logger_data, indent=2))
 
         try:
             response = requests.post(
@@ -79,6 +104,8 @@ class MoASystem:
         model: str,
         system_prompt: str,
         messages: List[Dict[str, str]],
+        user_text: str = None,
+        user_image_path: str = None,
         max_tokens: int = 1000,
         temperature: float = 0.7,
     ) -> str:
@@ -87,17 +114,36 @@ class MoASystem:
             "Authorization": f"Bearer {self.config.OPENAI_API_KEY}",
         }
 
-        full_messages = [{"role": "system", "content": system_prompt}] + messages
+        # Create the first message
+        first_message = {"role": "user", "content": []}
+        if user_text:
+            first_message["content"].append({"type": "text", "text": user_text})
+        if user_image_path:
+            base64_image = self.process_image(user_image_path)
+            first_message["content"].append(
+                {
+                    "type": "image_url",
+                    "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"},
+                }
+            )
+
+        openai_messages = [
+            {"role": "system", "content": system_prompt},
+            first_message,
+        ] + messages
 
         data = {
             "model": model,
-            "messages": full_messages,
+            "messages": openai_messages,
             "max_tokens": max_tokens,
             "temperature": temperature,
         }
 
         self.logger.debug("Request data:")
-        self.logger.debug(json.dumps(data, indent=2))
+        logger_data = copy.deepcopy(data)
+        if user_image_path:
+            logger_data["messages"][1]["content"][1].pop("image_url")
+        self.logger.debug(json.dumps(logger_data, indent=2))
 
         try:
             response = requests.post(
@@ -119,21 +165,35 @@ class MoASystem:
             return f"Error: {e}"
 
     def claude_3_5_sonnet(
-        self, system_prompt: str, messages: List[Dict[str, str]]
+        self,
+        system_prompt: str,
+        messages: List[Dict[str, str]],
+        user_text: str = None,
+        user_image_path: str = None,
     ) -> str:
         return self._call_anthropic_api(
             model="claude-3-5-sonnet-20240620",
             system_prompt=system_prompt,
             messages=messages,
+            user_text=user_text,
+            user_image_path=user_image_path,
             max_tokens=1000,
             temperature=0.2,
         )
 
-    def gpt_4o(self, system_prompt: str, messages: List[Dict[str, str]]) -> str:
+    def gpt_4o(
+        self,
+        system_prompt: str,
+        messages: List[Dict[str, str]],
+        user_text: str = None,
+        user_image_path: str = None,
+    ) -> str:
         return self._call_openai_api(
             model="gpt-4o",
             system_prompt=system_prompt,
             messages=messages,
+            user_text=user_text,
+            user_image_path=user_image_path,
             max_tokens=1000,
             temperature=0.2,
         )
@@ -146,18 +206,8 @@ class MoASystem:
             self.logger.error(f"Error processing image: {e}")
             return f"Error: {e}"
 
-    def run(self, user_prompt: Union[str, Dict]) -> str:
-        messages = [
-            {
-                "role": "user",
-                "content": (
-                    user_prompt
-                    if isinstance(user_prompt, str)
-                    else json.dumps(user_prompt)
-                ),
-            }
-        ]
-
+    def run(self, user_text: str = None, user_image_path: str = None) -> str:
+        messages = []
         for layer_index, layer in enumerate(self.layers):
             self.logger.info(f"Processing layer {layer_index + 1}")
 
@@ -166,7 +216,12 @@ class MoASystem:
             ):  # for all layers except the aggregation layer
                 layer_responses = []
                 for model_index, model in enumerate(layer, start=1):
-                    response = model(self.prompts.moa_intermediate_system(), messages)
+                    response = model(
+                        system_prompt=self.prompts.moa_intermediate_system(),
+                        messages=messages,
+                        user_text=user_text,
+                        user_image_path=user_image_path,
+                    )
                     if not response.startswith("Error:"):
                         layer_responses.append(f"Answer{model_index}: {response}")
                     else:
@@ -190,9 +245,19 @@ class MoASystem:
                     )
 
             else:  # for the aggregation layer
-                messages.append({"role": "user", "content": self.prompts.moa_final_instruct(user_prompt)})
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": self.prompts.moa_final_instruct(user_text),
+                    }
+                )
 
-                final_response = layer[0](self.prompts.moa_final_system(), messages)
+                final_response = layer[0](
+                    system_prompt=self.prompts.moa_final_system(),
+                    messages=messages,
+                    user_text=user_text,
+                    user_image_path=user_image_path,
+                )
                 return final_response
 
         self.logger.error("No valid response generated")
@@ -200,11 +265,10 @@ class MoASystem:
 
 
 if __name__ == "__main__":
+    user_text = "Answer the question from the image"
+    user_image_path = "image.jpg"
+
     moa = MoASystem()
-    user_prompt = {
-        "text": "At the event, there were 66 handshakes. If everyone shook hands with each other, how many people were at the event in total?",
-        # "image": moa.process_image("path/to/your/image.jpg")
-    }
-    final_response = moa.run(user_prompt)
+    final_response = moa.run(user_text, user_image_path)
     print("Final response:")
     print(final_response)
