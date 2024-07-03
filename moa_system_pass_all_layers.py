@@ -18,6 +18,7 @@ class MoASystem:
             # [self.claude_3_5_sonnet, self.gpt_4o],
             [self.claude_3_5_sonnet],  # Aggregation layer
         ]
+        
         self.logger = logging.getLogger(self.__class__.__name__)
         self.logger.setLevel(self.config.LOG_LEVEL)
         console_handler = logging.StreamHandler()
@@ -107,7 +108,7 @@ class MoASystem:
         user_text: str = None,
         user_image_path: str = None,
         max_tokens: int = 1000,
-        temperature: float = 0.7,
+        temperature: float = 0.2,
     ) -> str:
         headers = {
             "Content-Type": "application/json",
@@ -177,8 +178,8 @@ class MoASystem:
             messages=messages,
             user_text=user_text,
             user_image_path=user_image_path,
-            max_tokens=1000,
-            temperature=0.2,
+            max_tokens=self.config.MAX_TOKENS,
+            temperature=self.config.TEMPERATURE,
         )
 
     def gpt_4o(
@@ -194,8 +195,8 @@ class MoASystem:
             messages=messages,
             user_text=user_text,
             user_image_path=user_image_path,
-            max_tokens=1000,
-            temperature=0.2,
+            max_tokens=self.config.MAX_TOKENS,
+            temperature=self.config.TEMPERATURE,
         )
 
     def process_image(self, image_path: str) -> str:

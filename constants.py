@@ -89,3 +89,6 @@ class Config:
     ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
     LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+    
+    MAX_TOKENS = 1000
+    TEMPERATURE = 0.2
